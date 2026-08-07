@@ -52,23 +52,51 @@ class PhotoRestorationPipeline:
 
     def _load_color_model(self, path):
         """
-        Loads the OpenCV DNN Colorization model.
+        Loads the OpenCV DNN Colorization model, automatically downloading missing files.
         """
         print("Loading Deep Colorization model...")
         try:
             import os
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            prototxt = os.path.join(base_dir, "models", "colorization_deploy_v2.prototxt")
-            caffemodel = os.path.join(base_dir, "models", "colorization_release_v2.caffemodel")
-            npy_file = os.path.join(base_dir, "models", "pts_in_hull.npy")
+            import urllib.request
             
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            models_dir = os.path.join(base_dir, "models")
+            
+            # 1. Create the 'models' directory if it doesn't exist
+            if not os.path.exists(models_dir):
+                os.makedirs(models_dir)
+                print("Created 'models' directory.")
+                
+            prototxt = os.path.join(models_dir, "colorization_deploy_v2.prototxt")
+            caffemodel = os.path.join(models_dir, "colorization_release_v2.caffemodel")
+            npy_file = os.path.join(models_dir, "pts_in_hull.npy")
+            
+            # 2. Define direct download links for the required Caffe files
+            # Using HuggingFace for the large model to avoid rate limits
+            urls = {
+                prototxt: "https://raw.githubusercontent.com/richzhang/colorization/caffe/models/colorization_deploy_v2.prototxt",
+                caffemodel: "https://huggingface.co/jags/colorization_release_v2/resolve/main/colorization_release_v2.caffemodel",
+                npy_file: "https://github.com/richzhang/colorization/raw/caffe/resources/pts_in_hull.npy"
+            }
+            
+            # 3. Download the files if they aren't already on the server
+            for file_path, url in urls.items():
+                if not os.path.exists(file_path):
+                    print(f"Downloading {os.path.basename(file_path)}... (This may take a minute)")
+                    urllib.request.urlretrieve(url, file_path)
+            
+            # 4. Load the network using OpenCV 
+            import cv2
+            import numpy as np
             net = cv2.dnn.readNetFromCaffe(prototxt, caffemodel)
             pts_in_hull = np.load(npy_file)
             
             pts_in_hull = pts_in_hull.transpose().reshape(2, 313, 1, 1)
             net.getLayer(net.getLayerId('class8_ab')).blobs = [pts_in_hull.astype(np.float32)]
             net.getLayer(net.getLayerId('conv8_313_rh')).blobs = [np.full([1, 313], 2.606, np.float32)]
+            print("Colorization models loaded successfully.")
             return net
+            
         except Exception as e:
             print(f"Warning: Could not load color model: {e}")
             return None
