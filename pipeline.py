@@ -57,7 +57,7 @@ class PhotoRestorationPipeline:
         print("Loading Deep Colorization model...")
         try:
             import os
-            import urllib.request
+            import requests
             
             base_dir = os.path.dirname(os.path.abspath(__file__))
             models_dir = os.path.join(base_dir, "models")
@@ -72,18 +72,33 @@ class PhotoRestorationPipeline:
             npy_file = os.path.join(models_dir, "pts_in_hull.npy")
             
             # 2. Define direct download links for the required Caffe files
-            # Using HuggingFace for the large model to avoid rate limits
             urls = {
                 prototxt: "https://raw.githubusercontent.com/richzhang/colorization/caffe/models/colorization_deploy_v2.prototxt",
                 caffemodel: "https://huggingface.co/jags/colorization_release_v2/resolve/main/colorization_release_v2.caffemodel",
                 npy_file: "https://github.com/richzhang/colorization/raw/caffe/resources/pts_in_hull.npy"
             }
             
-            # 3. Download the files if they aren't already on the server
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            
+            # 3. Clean up corrupted or incomplete previous downloads
             for file_path, url in urls.items():
+                if os.path.exists(file_path):
+                    file_size_kb = os.path.getsize(file_path) / 1024
+                    # caffemodel should be ~125MB (~128,000 KB). If < 1000 KB or 0 KB, delete it.
+                    if "caffemodel" in file_path and file_size_kb < 1000:
+                        print(f"Corrupted model file detected ({file_size_kb:.1f} KB). Deleting...")
+                        os.remove(file_path)
+                    elif file_size_kb == 0:
+                        os.remove(file_path)
+
+                # Download file if missing
                 if not os.path.exists(file_path):
                     print(f"Downloading {os.path.basename(file_path)}... (This may take a minute)")
-                    urllib.request.urlretrieve(url, file_path)
+                    response = requests.get(url, headers=headers, stream=True)
+                    response.raise_for_status()
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
             
             # 4. Load the network using OpenCV 
             import cv2
