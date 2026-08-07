@@ -72,9 +72,10 @@ class PhotoRestorationPipeline:
             npy_file = os.path.join(models_dir, "pts_in_hull.npy")
             
             # 2. Define direct download links for the required Caffe files
+            # 2. Define direct download links for the required Caffe files
             urls = {
                 prototxt: "https://raw.githubusercontent.com/richzhang/colorization/caffe/models/colorization_deploy_v2.prototxt",
-                caffemodel: "https://huggingface.co/jags/colorization_release_v2/resolve/main/colorization_release_v2.caffemodel",
+                caffemodel: "https://www.dropbox.com/s/dx0qvhhx5huu46s/colorization_release_v2.caffemodel?dl=1",
                 npy_file: "https://github.com/richzhang/colorization/raw/caffe/resources/pts_in_hull.npy"
             }
             
