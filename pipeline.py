@@ -52,67 +52,23 @@ class PhotoRestorationPipeline:
 
     def _load_color_model(self, path):
         """
-        Loads the OpenCV DNN Colorization model, automatically downloading missing files.
+        Loads the OpenCV DNN Colorization model.
         """
         print("Loading Deep Colorization model...")
         try:
             import os
-            import requests
-            
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            models_dir = os.path.join(base_dir, "models")
+            prototxt = os.path.join(base_dir, "models", "colorization_deploy_v2.prototxt")
+            caffemodel = os.path.join(base_dir, "models", "colorization_release_v2.caffemodel")
+            npy_file = os.path.join(base_dir, "models", "pts_in_hull.npy")
             
-            # 1. Create the 'models' directory if it doesn't exist
-            if not os.path.exists(models_dir):
-                os.makedirs(models_dir)
-                print("Created 'models' directory.")
-                
-            prototxt = os.path.join(models_dir, "colorization_deploy_v2.prototxt")
-            caffemodel = os.path.join(models_dir, "colorization_release_v2.caffemodel")
-            npy_file = os.path.join(models_dir, "pts_in_hull.npy")
-            
-            # 2. Define direct download links for the required Caffe files
-            # 2. Define direct download links for the required Caffe files
-            urls = {
-                prototxt: "https://raw.githubusercontent.com/richzhang/colorization/caffe/models/colorization_deploy_v2.prototxt",
-                caffemodel: "https://www.dropbox.com/s/dx0qvhhx5huu46s/colorization_release_v2.caffemodel?dl=1",
-                npy_file: "https://github.com/richzhang/colorization/raw/caffe/resources/pts_in_hull.npy"
-            }
-            
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            
-            # 3. Clean up corrupted or incomplete previous downloads
-            for file_path, url in urls.items():
-                if os.path.exists(file_path):
-                    file_size_kb = os.path.getsize(file_path) / 1024
-                    # caffemodel should be ~125MB (~128,000 KB). If < 1000 KB or 0 KB, delete it.
-                    if "caffemodel" in file_path and file_size_kb < 1000:
-                        print(f"Corrupted model file detected ({file_size_kb:.1f} KB). Deleting...")
-                        os.remove(file_path)
-                    elif file_size_kb == 0:
-                        os.remove(file_path)
-
-                # Download file if missing
-                if not os.path.exists(file_path):
-                    print(f"Downloading {os.path.basename(file_path)}... (This may take a minute)")
-                    response = requests.get(url, headers=headers, stream=True)
-                    response.raise_for_status()
-                    with open(file_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-            
-            # 4. Load the network using OpenCV 
-            import cv2
-            import numpy as np
             net = cv2.dnn.readNetFromCaffe(prototxt, caffemodel)
             pts_in_hull = np.load(npy_file)
             
             pts_in_hull = pts_in_hull.transpose().reshape(2, 313, 1, 1)
             net.getLayer(net.getLayerId('class8_ab')).blobs = [pts_in_hull.astype(np.float32)]
             net.getLayer(net.getLayerId('conv8_313_rh')).blobs = [np.full([1, 313], 2.606, np.float32)]
-            print("Colorization models loaded successfully.")
             return net
-            
         except Exception as e:
             print(f"Warning: Could not load color model: {e}")
             return None
